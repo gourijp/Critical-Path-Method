@@ -1,169 +1,105 @@
 <input id="fileInp" type="file"> </input>
 <p id="para1"> </p>
+<div id="mynetwork"></div>
 
-<script type="application/javascript" src="jquery-1.12.0.js"> </script>
-<script type="application/javascript" src="vis.min.js"></script>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.14.0/vis.min.css" rel="stylesheet" type="text/css" />
+<style type="text/css">
+    #mynetwork {
+        width: 2000px;
+        height: 1000px;
+        background-color: bisque;
+    }
+</style>
+
+
+<script type="application/javascript" src="//code.jquery.com/jquery-1.12.0.min.js"></script>
+<script type="application/javascript" src="CPMLibrary.js"></script>
+<script type="application/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.14.0/vis.min.js"></script>
+
+
 <script type="application/javascript">
 
-    var fileText = "ACTIVITY,DESCRIPTION,PREDECESSOR,DURATION\n" +
-            "A,READ,NONE,2\n" +
-            "B,MODIFY,A&D,1\n" +
-            "C,WRITE,D,6\n"+
-            "F,WRITE,C,2\n"+
-            "D,WRITE,NONE,5\n"+
-            "E,WRITE,B&C,4\n";
-
-
-var createTaskStoreFunction = function (textData) {
-
-        var schedulingData = [];
-
-        var schedulingTextArray = textData.split("\n");
-        var headers = schedulingTextArray[0].split(',');
-
-        for (var k = 1; k < schedulingTextArray.length; k++) {
-            schedulingData[k - 1] = schedulingTextArray[k].split(',');
-        }
-        schedulingData.pop();
-
-        for (var k = 0; k < schedulingData.length; k++){
-            var predecessorElement = schedulingData[k][2];
-            predecessorElement = predecessorElement.split('&');
-
-            var index = predecessorElement.indexOf("NONE")
-            if (index > -1) {
-                predecessorElement.splice(index, 1);
-            }
-            schedulingData[k][2] = predecessorElement;
-            schedulingData[k][3] = parseInt(schedulingData[k][3]);
-        }
-
-        var taskStore = {};
-
-        for (var i = 0; i < schedulingData.length; i++) {
-           var tempObj = {};
-            for (var j = 0; j < headers.length; j++) {
-                tempObj[headers[j]] = schedulingData[i][j];
-
-            }
-            taskStore['task' + schedulingData[i][0]] = tempObj;
-
-        }
-        for (var i = 0; i < schedulingData.length; i++) {
-            taskStore['task' + schedulingData[i][0]]["PREDECESSOR"] = [];
-            taskStore['task' + schedulingData[i][0]]["SUCCESSOR"] = [];
-        }
-
-        for (var i = 0; i < schedulingData.length; i++){
-            for(j = 0; j<schedulingData[i][2].length; j++) {
-                taskStore['task' + schedulingData[i][0]][headers[2]][j] = taskStore['task' + schedulingData[i][2][j]];
-                taskStore['task' + schedulingData[i][2][j]]["SUCCESSOR"].push(taskStore['task' + schedulingData[i][0]]);
-            }
-        }
-        return taskStore;
+    var readFileData = function(data){
+        var myTextData = data.target.result;
+        var taskStore = CPMLib.createTaskStoreFunction(myTextData);
+        var topologyArray = CPMLib.topologicalSort(taskStore);
+        var cpmForwardPassArray = CPMLib.cpmForwardPassCalc(topologyArray);
+        var BackwardPassArray = CPMLib.cpmBackwardPassCalc(cpmForwardPassArray);
+        var CPMParametersArray = CPMLib.slackCalc(BackwardPassArray);
+        var nodesEdgesObject = createNodesEdges(CPMParametersArray);
+        drawChart(nodesEdgesObject);
     }
 
 
-    var subset = function(subset,set){
-
-        for(var i = 0; i<subset.length; i++){
-            if(set.indexOf(subset[i]) === -1){
-                return false;
-            }
-        }
-        return true;
+    var fileImportEvent = function(event){
+        var myFile = event.target.files[0];
+        var reader = new FileReader();
+        reader.readAsText(myFile);
+        reader.onload = readFileData;
     }
 
-    var topologicalSort = function(taskStore){
-        var topologyArray = [];
-        var taskContainerArray = Object.keys(taskStore);
+    $("#fileInp").change(fileImportEvent);
 
-        while(taskContainerArray.length !== topologyArray.length) {
-            for (var i = 0; i < taskContainerArray.length; i++) {
-                var isSubset = subset(taskStore[taskContainerArray[i]]["PREDECESSOR"], topologyArray);
-                if((isSubset === true)&&(topologyArray.indexOf(taskStore[taskContainerArray[i]]) === -1)) {
-                    topologyArray.push(taskStore[taskContainerArray[i]]);
+    var createNodesEdges = function(pathListArray){
+        var nodesEdgesObject = {};
+        nodesEdgesObject.nodesArray = [];
+        for (var i = 0; i<pathListArray.length; i++){
+            nodesEdgesObject.nodesArray[i] = {};
+            nodesEdgesObject.nodesArray[i].id = i+1;
+            nodesEdgesObject.nodesArray[i].label = pathListArray[i]["ACTIVITY"]+ "\nDuration:"+ pathListArray[i]["DURATION"] + "\nES:"+ pathListArray[i]["ES"] + " | EF:" + pathListArray[i]["EF"] + "\nLS:" + pathListArray[i]["LS"] + " | LF:" + pathListArray[i]["LF"];
+            nodesEdgesObject.nodesArray[i].shape = 'box';
+
+            if(pathListArray[i].Totalfloat !== 0) {
+                nodesEdgesObject.nodesArray[i].color = '#7BE141';
+            }
+            else {
+                nodesEdgesObject.nodesArray[i].color = '#FF0000';
+            }
+            pathListArray[i].id = i+1;
+        }
+        nodesEdgesObject.edgesArray = [];
+        for(var i = 0; i<pathListArray.length; i++) {
+            for (var j = 0; j < pathListArray[i]["SUCCESSOR"].length; j++) {
+                if((pathListArray[i].Totalfloat === 0) && (pathListArray[i]["SUCCESSOR"][j].Totalfloat === 0)) {
+                    nodesEdgesObject.edgesArray.push({
+                        from: i + 1,
+                        to: pathListArray[i]["SUCCESSOR"][j].id,
+                        arrows: 'to',
+                        color: '#FF0000'
+                    })
+
+                }
+                else  {
+                    nodesEdgesObject.edgesArray.push({
+                        from: i + 1,
+                        to: pathListArray[i]["SUCCESSOR"][j].id,
+                        arrows: 'to',
+                        color: '#7BE141'
+                    })
                 }
             }
         }
-        return topologyArray;
+        return nodesEdgesObject;
     }
 
+    var drawChart = function(object) {
 
-    var cpmForwardPassCalc = function(topologyArray){
-      for(var i = 0; i<topologyArray.length; i++){
+        var nodes = new vis.DataSet(object.nodesArray);
+        var edges = new vis.DataSet(object.edgesArray);
 
-          var precedenceArray = topologyArray[i]["PREDECESSOR"];
-          var arrayOfEF = [];
-
-          if(precedenceArray.length === 0){
-              topologyArray[i].ES = 0;
-              topologyArray[i].EF = topologyArray[i]["DURATION"];
-          }
-          else {
-              for (var j=0; j<precedenceArray.length; j++) {
-                  arrayOfEF.push(precedenceArray[j]["EF"]);
-              }
-                  topologyArray[i].ES = Math.max.apply(Math, arrayOfEF);
-                  topologyArray[i].EF = topologyArray[i].ES + topologyArray[i]["DURATION"];
-          }
-      }
-        return topologyArray;
-    }
-
-
-
-    var cpmBackwardPassCalc = function(forwardPassArray){
-        var tempArrayOfEF = [];
-
-        for(var i = forwardPassArray.length - 1; i>=0;  i--) {
-            var successorArray = forwardPassArray[i]["SUCCESSOR"];
-
-            if (successorArray.length === 0) {
-                tempArrayOfEF.push(forwardPassArray[i].EF);
+        var container = document.getElementById('mynetwork');
+        var data = {
+            nodes: nodes,
+            edges: edges
+        };
+        var options = {layout: {
+            hierarchical: {
+                sortMethod: "directed",
+                direction: "UD"
             }
-        }
-
-        for(var i = forwardPassArray.length - 1; i>=0;  i--) {
-            successorArray = forwardPassArray[i]["SUCCESSOR"];
-            var arrayOfLS = [];
-
-            if (successorArray.length === 0) {
-                forwardPassArray[i].LF = Math.max.apply(Math, tempArrayOfEF);
-                forwardPassArray[i].LS = forwardPassArray[i].LF - forwardPassArray[i]["DURATION"];
-            }
-            else{
-                for(var j=0; j<successorArray.length; j++){
-                    arrayOfLS.push(successorArray[j]["LS"]);
-                }
-                forwardPassArray[i].LF = Math.min.apply(Math, arrayOfLS);
-                forwardPassArray[i].LS = forwardPassArray[i].LF - forwardPassArray[i]["DURATION"];
-            }
-        }
-        return forwardPassArray;
-    }
-
-
-
-    var slackCalculator = function(CPMParametersArray){
-
-        for(var i = 0; i<CPMParametersArray.length; i++){
-           CPMParametersArray[i].Totalfloat = CPMParametersArray[i].LF - CPMParametersArray[i].EF;
-
-            if(CPMParametersArray[i].Totalfloat === 0){
-                document.getElementById("para1").innerHTML = document.getElementById("para1").innerHTML + "Task "+ CPMParametersArray[i]["ACTIVITY"] + " is on Critical Path. <br>"
-            }
-        }
-    }
-
-
-
-    var CPMCalculator = function(text){
-        var taskStoreObject = createTaskStoreFunction(text);
-        var arrayOfTopologicallySortedTasks = topologicalSort(taskStoreObject);
-        var topologyArrayWithForwardPass = cpmForwardPassCalc(arrayOfTopologicallySortedTasks);
-        var topologyArrayWithCPMParameters = cpmBackwardPassCalc(topologyArrayWithForwardPass);
-        slackCalculator(topologyArrayWithCPMParameters);
+        }};
+        var network = new vis.Network(container, data, options);
     }
 
 </script>
