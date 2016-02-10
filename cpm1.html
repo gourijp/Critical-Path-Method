@@ -63,7 +63,6 @@ var createTaskStoreFunction = function (textData) {
         return taskStore;
     }
 
- var taskStore = createTaskStoreFunction(fileText);
 
     var subset = function(subset,set){
 
@@ -75,21 +74,21 @@ var createTaskStoreFunction = function (textData) {
         return true;
     }
 
-    var topologicalSort = function(taskContainer){
+    var topologicalSort = function(taskStore){
         var topologyArray = [];
-        var taskContainerArray = Object.keys(taskContainer);
+        var taskContainerArray = Object.keys(taskStore);
 
         while(taskContainerArray.length !== topologyArray.length) {
             for (var i = 0; i < taskContainerArray.length; i++) {
-                var isSubset = subset(taskContainer[taskContainerArray[i]]["PREDECESSOR"], topologyArray);
-                if((isSubset === true)&&(topologyArray.indexOf(taskContainer[taskContainerArray[i]]) === -1)) {
-                    topologyArray.push(taskContainer[taskContainerArray[i]]);
+                var isSubset = subset(taskStore[taskContainerArray[i]]["PREDECESSOR"], topologyArray);
+                if((isSubset === true)&&(topologyArray.indexOf(taskStore[taskContainerArray[i]]) === -1)) {
+                    topologyArray.push(taskStore[taskContainerArray[i]]);
                 }
             }
         }
         return topologyArray;
     }
-    var topologyArray = topologicalSort(taskStore);
+
 
     var cpmForwardPassCalc = function(topologyArray){
       for(var i = 0; i<topologyArray.length; i++){
@@ -112,7 +111,7 @@ var createTaskStoreFunction = function (textData) {
         return topologyArray;
     }
 
-    var cpmForwardPassArray = cpmForwardPassCalc(topologyArray);
+
 
     var cpmBackwardPassCalc = function(forwardPassArray){
         var tempArrayOfEF = [];
@@ -144,7 +143,7 @@ var createTaskStoreFunction = function (textData) {
         return forwardPassArray;
     }
 
-    var BackwardPassArray = cpmBackwardPassCalc(cpmForwardPassArray);
+
 
     var slackCalculator = function(CPMParametersArray){
 
@@ -157,6 +156,14 @@ var createTaskStoreFunction = function (textData) {
         }
     }
 
-    var criticalPathListArray = slackCalculator(BackwardPassArray);
+
+
+    var CPMCalculator = function(text){
+        var taskStoreObject = createTaskStoreFunction(text);
+        var arrayOfTopologicallySortedTasks = topologicalSort(taskStoreObject);
+        var topologyArrayWithForwardPass = cpmForwardPassCalc(arrayOfTopologicallySortedTasks);
+        var topologyArrayWithCPMParameters = cpmBackwardPassCalc(topologyArrayWithForwardPass);
+        slackCalculator(topologyArrayWithCPMParameters);
+    }
 
 </script>
